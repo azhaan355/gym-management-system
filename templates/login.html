@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Login - FlexFit</title>
+  <meta name="title" content="FlexFit Login"/>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"/>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}"/>
+</head>
+<body class="auth-page">
+  <main class="auth-shell">
+    <section class="auth-panel">
+      <div class="brand-row auth-brand">
+        <div class="brand-icon">F</div>
+        <div>
+          <h1>FlexFit</h1>
+          <p>Sign in to your premium gym workspace.</p>
+        </div>
+      </div>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="flash-stack">
+            {% for category, message in messages %}
+              <div class="flash {{ category }}">{{ message }}</div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+
+      <form class="form-grid" method="post">
+        <div class="role-selector" aria-label="Choose login role">
+          <label>
+            <input type="radio" name="role" value="admin" checked>
+            <span>Admin</span>
+          </label>
+          <label>
+            <input type="radio" name="role" value="trainer">
+            <span>Trainer</span>
+          </label>
+          <label>
+            <input type="radio" name="role" value="member">
+            <span>Member</span>
+          </label>
+        </div>
+        <label>
+          Email or phone
+          <input name="identifier" type="text" placeholder="admin@gym.com" required/>
+        </label>
+        <label>
+          Password
+          <input name="password" type="password" placeholder="admin123" required/>
+        </label>
+        <button class="btn btn-primary auth-submit" type="submit">Login</button>
+      </form>
+
+      <div class="auth-hint">
+        Default admin: <strong>admin@gym.com</strong> / <strong>admin123</strong>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

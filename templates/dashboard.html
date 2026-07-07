@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FlexFit {{ role|title }} Dashboard</title>
+  <meta name="title" content="FlexFit Dashboard"/>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"/>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}"/>
+</head>
+<body>
+<div class="overlay" id="overlay"></div>
+
+<div class="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-mark">F</div>
+      <div class="brand-copy">
+        <span class="brand-name">FlexFit</span>
+        <span class="brand-tag">{{ role|title }} Console</span>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="#dashboard" class="nav-item active" data-tip="Dashboard"><i data-icon="layout"></i><span>Dashboard</span></a>
+      {% if role == "admin" %}
+      <a href="#members" class="nav-item" data-tip="Members"><i data-icon="users"></i><span>Members</span></a>
+      <a href="#trainers" class="nav-item" data-tip="Trainers"><i data-icon="dumbbell"></i><span>Trainers</span></a>
+      <a href="#plans" class="nav-item" data-tip="Plans"><i data-icon="badge"></i><span>Plans</span></a>
+      <a href="#payments" class="nav-item" data-tip="Payments"><i data-icon="wallet"></i><span>Payments</span></a>
+      <a href="#analytics" class="nav-item" data-tip="Analytics"><i data-icon="chart"></i><span>Analytics</span></a>
+      {% elif role == "member" %}
+      <a href="#membership" class="nav-item" data-tip="My Membership"><i data-icon="badge"></i><span>My Membership</span></a>
+      <a href="#my-payments" class="nav-item" data-tip="Payments"><i data-icon="wallet"></i><span>Payments</span></a>
+      <a href="#my-trainer" class="nav-item" data-tip="Trainer"><i data-icon="dumbbell"></i><span>Trainer</span></a>
+      {% elif role == "trainer" %}
+      <a href="#assigned-members" class="nav-item" data-tip="Assigned Members"><i data-icon="users"></i><span>Assigned Members</span></a>
+      <a href="#attendance" class="nav-item" data-tip="Attendance"><i data-icon="activity"></i><span>Attendance</span></a>
+      <a href="#notes" class="nav-item" data-tip="Notes"><i data-icon="edit"></i><span>Notes</span></a>
+      {% endif %}
+    </nav>
+
+    {% if role != "admin" %}
+    <div class="ai-card">
+      <div class="ai-kicker">AI Coach</div>
+      <p>Generate quick workout and diet prompts from member goals.</p>
+      <button class="mini-action" type="button" data-open-modal="aiModal">Open</button>
+    </div>
+    {% endif %}
+
+    <div class="sidebar-foot">
+      <div class="sidebar-user">
+        <div class="avatar">{{ user.full_name[:2].upper() }}</div>
+        <div>
+          <div class="u-name">{{ user.full_name }}</div>
+          <div class="u-role">{{ role|title }}</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <div class="main-wrap" id="mainWrap">
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="icon-btn" id="toggleBtn" aria-label="Toggle sidebar"><i data-icon="menu"></i></button>
+        <div class="search-box">
+          <i data-icon="search"></i>
+          <input id="globalSearch" type="search" placeholder="{% if role == 'admin' %}Search members, trainers, payments...{% elif role == 'trainer' %}Search assigned members...{% else %}Search your membership...{% endif %}"/>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <button class="icon-btn notification-btn" id="notificationBtn" aria-label="Notifications">
+          <i data-icon="bell"></i>
+          <span class="dot"></span>
+        </button>
+        <div class="clock-pill"><i data-icon="calendar"></i><span id="clockText">Today</span></div>
+        <button class="icon-btn" id="themeBtn" aria-label="Toggle theme"><i data-icon="moon"></i></button>
+        <details class="profile-menu">
+          <summary><span class="avatar sm">{{ user.full_name[:2].upper() }}</span><span>{{ user.full_name }}</span></summary>
+          <div class="profile-pop">
+            <strong>{{ user.full_name }}</strong>
+            <small>{{ role|title }} access</small>
+          </div>
+        </details>
+        <a class="btn btn-ghost logout-btn" href="{{ url_for('logout') }}"><i data-icon="logout"></i>Logout</a>
+      </div>
+    </header>
+
+    <aside class="notification-panel" id="notificationPanel">
+      <div class="panel-head">
+        <strong>Notifications</strong>
+        <button class="icon-btn sm-btn" id="closeNotifications" type="button"><i data-icon="x"></i></button>
+      </div>
+      <div class="notice-list">
+        <div class="notice"><span class="notice-dot green"></span><div><b>{% if role == "trainer" %}Assigned member{% elif role == "member" %}Membership update{% else %}New member joined{% endif %}</b><small>{{ members[0].full_name if members else "No updates yet" }}</small></div></div>
+        <div class="notice"><span class="notice-dot blue"></span><div><b>Payment completed</b><small>Revenue records synced</small></div></div>
+        <div class="notice"><span class="notice-dot amber"></span><div><b>Expiring soon</b><small>{{ stats.expiring }} memberships need reminders</small></div></div>
+        <div class="notice"><span class="notice-dot red"></span><div><b>Overdue payments</b><small>{{ stats.overdue }} members require follow-up</small></div></div>
+      </div>
+    </aside>
+
+    <main class="content" id="dashboard">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="toast-stack">
+            {% for category, message in messages %}
+              <div class="toast {{ category }}">{{ message }}</div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+
+      {% if role == "admin" %}
+      <section class="hero-panel">
+        <div>
+          <span class="eyebrow">FlexFit Workspace</span>
+          <h1>Welcome back, {{ user.full_name.split(" ")[0] }}.</h1>
+          <p>Track members, revenue, trainers, renewals, and daily operations from one focused command center.</p>
+        </div>
+        {% if role == "admin" %}
+        <div class="quick-actions">
+          <button class="btn btn-primary" type="button" data-open-modal="memberModal"><i data-icon="user-plus"></i>Add Member</button>
+          <button class="btn btn-ghost" type="button" data-open-modal="trainerModal"><i data-icon="plus"></i>Add Trainer</button>
+          <button class="btn btn-ghost" type="button" data-open-modal="planModal"><i data-icon="badge"></i>Create Plan</button>
+        </div>
+        {% endif %}
+      </section>
+
+      <section class="stats-grid" aria-label="Dashboard overview">
+        <article class="stat-card"><div class="stat-icon blue"><i data-icon="users"></i></div><span>Total Members</span><strong data-count="{{ stats.members }}">{{ stats.members }}</strong><small class="trend up">+12% this month</small></article>
+        <article class="stat-card"><div class="stat-icon green"><i data-icon="activity"></i></div><span>Active Members</span><strong data-count="{{ stats.active_members }}">{{ stats.active_members }}</strong><small class="trend up">Healthy retention</small></article>
+        <article class="stat-card"><div class="stat-icon violet"><i data-icon="dumbbell"></i></div><span>Trainers</span><strong data-count="{{ stats.trainers }}">{{ stats.trainers }}</strong><small class="trend">Capacity online</small></article>
+        <article class="stat-card"><div class="stat-icon amber"><i data-icon="wallet"></i></div><span>Revenue</span><strong data-count="{{ stats.revenue }}">Rs {{ "%.0f"|format(stats.revenue) }}</strong><small class="trend up">Completed payments</small></article>
+        <article class="stat-card"><div class="stat-icon red"><i data-icon="clock"></i></div><span>Expiring Soon</span><strong data-count="{{ stats.expiring }}">{{ stats.expiring }}</strong><small class="trend warn">Next 7 days</small></article>
+        <article class="stat-card"><div class="stat-icon cyan"><i data-icon="badge"></i></div><span>Plans</span><strong data-count="{{ stats.plans }}">{{ stats.plans }}</strong><small class="trend">Active catalog</small></article>
+      </section>
+
+      <section class="dashboard-grid">
+        <article class="card chart-card" id="analytics">
+          <div class="card-head">
+            <div><h2>Performance Analytics</h2><p>Completed membership revenue over the last six months.</p></div>
+          </div>
+          <div class="analytics-layout">
+            <div class="line-chart" aria-label="Monthly revenue chart">
+              {% for bar in analytics_bars %}
+              <span style="height:{{ bar.height }}%" title="{{ bar.label }} revenue: Rs {{ '%.0f'|format(bar.value) }}"><em>Rs {{ "%.0f"|format(bar.value) }}</em><small>{{ bar.label }}</small></span>
+              {% endfor %}
+            </div>
+            <div class="mini-metrics">
+              <div><b>{{ stats.active_members }}</b><span>Active memberships</span></div>
+              <div><b>Rs {{ "%.0f"|format(stats.revenue) }}</b><span>Total revenue</span></div>
+              <div><b>{{ stats.expiring }}</b><span>Renewal reminders</span></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="card-head"><div><h2>Expiry Radar</h2><p>Memberships expiring within 7 days.</p></div></div>
+          <div class="compact-list">
+            {% for member in expiring_members[:5] %}
+            <div class="list-row"><div><b>{{ member.full_name }}</b><span>{{ member.plan_name or "No plan" }}</span></div><em>{{ member.days_to_expiry }} days</em></div>
+            {% else %}
+            <div class="empty-state"><i data-icon="check"></i><b>No urgent renewals</b><span>Membership reminders will appear here.</span></div>
+            {% endfor %}
+          </div>
+        </article>
+      </section>
+
+      <section class="card data-card" id="members">
+        <div class="card-head split">
+          <div><h2>Members</h2><p>Search, sort, filter, and manage active memberships.</p></div>
+          <div class="table-tools">
+            <input class="table-search" data-table-search="membersTable" placeholder="Search members"/>
+            <select class="table-filter" data-table-filter="membersTable">
+              <option value="">All status</option>
+              <option value="active">Active</option>
+              <option value="expired">Expired</option>
+              <option value="inactive">Inactive</option>
+              <option value="suspended">Suspended</option>
+            </select>
+          </div>
+        </div>
+        <div class="table-scroll">
+          <table class="tbl sortable" id="membersTable">
+            <thead>
+              <tr>
+                <th>Profile</th><th>Name</th><th>Phone</th><th>Plan</th><th>Trainer</th><th>Join Date</th><th>Expiry Date</th><th>Status</th>{% if role == "admin" %}<th>Actions</th>{% endif %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for member in members %}
+              <tr data-status="{{ member.status }}">
+                <td><span class="avatar">{{ member.full_name[:2].upper() }}</span></td>
+                <td><b>{{ member.full_name }}</b><small>{{ member.email or "No email" }}</small></td>
+                <td>{{ member.phone }}</td>
+                <td>{{ member.plan_name or "Unassigned" }}</td>
+                <td>{{ member.trainer_name or "Not assigned" }}</td>
+                <td>{{ member.join_date }}</td>
+                <td>{{ member.expiry_date or "Not set" }}</td>
+                <td><span class="status-badge {{ member.status }}">{{ member.status }}</span></td>
+                {% if role == "admin" %}
+                <td class="action-row">
+                  <button class="icon-btn sm-btn" type="button" title="View" data-open-modal="viewMemberModal{{ member.id }}"><i data-icon="eye"></i></button>
+                  <details>
+                    <summary class="icon-btn sm-btn" title="Edit"><i data-icon="edit"></i></summary>
+                    <form class="edit-form form-grid" method="post" action="{{ url_for('update_member', member_id=member.id) }}">
+                      <label>Full name<input name="full_name" value="{{ member.full_name }}" required></label>
+                      <label>Phone<input name="phone" value="{{ member.phone }}" required></label>
+                      <label>Email<input type="email" name="email" value="{{ member.email or '' }}"></label>
+                      <label>Gender<select name="gender">{% for gender in ["male", "female", "other"] %}<option value="{{ gender }}" {% if member.gender == gender %}selected{% endif %}>{{ gender|title }}</option>{% endfor %}</select></label>
+                      <label>Date of birth<input type="date" name="date_of_birth" value="{{ member.date_of_birth or '' }}"></label>
+                      <label>Join date<input type="date" name="join_date" value="{{ member.join_date }}" required></label>
+                      <label>Status<select name="status">{% for status in ["active", "inactive", "suspended", "expired"] %}<option value="{{ status }}" {% if member.status == status %}selected{% endif %}>{{ status|title }}</option>{% endfor %}</select></label>
+                      <label>Trainer<select name="assigned_trainer_id"><option value="">No trainer</option>{% for trainer in trainers %}<option value="{{ trainer.id }}" {% if member.assigned_trainer_id == trainer.id %}selected{% endif %}>{{ trainer.full_name }}</option>{% endfor %}</select></label>
+                      <label>Emergency contact<input name="emergency_contact" value="{{ member.emergency_contact or '' }}"></label>
+                      <label>Emergency phone<input name="emergency_phone" value="{{ member.emergency_phone or '' }}"></label>
+                      <label class="span-2">Address<textarea name="address" rows="2">{{ member.address or "" }}</textarea></label>
+                      <button class="btn btn-primary" type="submit">Save Changes</button>
+                    </form>
+                  </details>
+                  <form method="post" action="{{ url_for('delete_member', member_id=member.id) }}"><button class="icon-btn sm-btn danger" type="submit" onclick="return confirm('Delete this member?')" title="Delete"><i data-icon="trash"></i></button></form>
+                </td>
+                {% endif %}
+              </tr>
+              {% else %}
+              <tr><td colspan="9"><div class="empty-state"><i data-icon="users"></i><b>No members yet</b><span>Add your first member to start tracking memberships.</span><button class="btn btn-primary" type="button" data-open-modal="memberModal">Add Member</button></div></td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="pagination"><button class="btn btn-ghost">Previous</button><span>Page 1</span><button class="btn btn-ghost">Next</button></div>
+      </section>
+
+      <section class="card data-card" id="trainers">
+        <div class="card-head split">
+          <div><h2>Trainers</h2><p>Coach directory, assignments, salary, and status.</p></div>
+          <input class="table-search" data-table-search="trainersTable" placeholder="Search trainers"/>
+        </div>
+        <div class="table-scroll">
+          <table class="tbl sortable" id="trainersTable">
+            <thead><tr><th>Image</th><th>Name</th><th>Specialization</th><th>Experience</th><th>Assigned Members</th><th>Salary</th><th>Status</th>{% if role == "admin" %}<th>Actions</th>{% endif %}</tr></thead>
+            <tbody>
+              {% for trainer in trainers %}
+              <tr data-status="{{ trainer.status }}">
+                <td><span class="avatar">{{ trainer.full_name[:2].upper() }}</span></td>
+                <td><b>{{ trainer.full_name }}</b><small>{{ trainer.email or "No email" }}</small></td>
+                <td>{{ trainer.specialization or "General fitness" }}</td>
+                <td>{{ trainer.experience_years }} yrs</td>
+                <td>{{ trainer.assigned_members }}</td>
+                <td>Rs {{ "%.0f"|format(trainer.salary) }}</td>
+                <td><span class="status-badge {{ trainer.status }}">{{ trainer.status }}</span></td>
+                {% if role == "admin" %}
+                <td class="action-row"><button class="icon-btn sm-btn" type="button" title="View" data-open-modal="viewTrainerModal{{ trainer.id }}"><i data-icon="eye"></i></button><button class="icon-btn sm-btn" type="button" title="Edit" data-open-modal="editTrainerModal{{ trainer.id }}"><i data-icon="edit"></i></button><form method="post" action="{{ url_for('delete_trainer', trainer_id=trainer.id) }}"><button class="icon-btn sm-btn danger" type="submit" onclick="return confirm('Delete this trainer?')" title="Delete"><i data-icon="trash"></i></button></form></td>
+                {% endif %}
+              </tr>
+              {% else %}
+              <tr><td colspan="8"><div class="empty-state"><i data-icon="dumbbell"></i><b>No trainers found</b><span>Create trainer profiles for scheduling and assignments.</span><button class="btn btn-primary" type="button" data-open-modal="trainerModal">Add Trainer</button></div></td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="plans-grid" id="plans">
+        {% for plan in plans %}
+        <article class="plan-card">
+          <div class="plan-top"><span>{{ plan.plan_name }}</span><i data-icon="badge"></i></div>
+          <h3>Rs {{ "%.0f"|format(plan.price) }}</h3>
+          <p>{{ plan.duration_days }} days membership</p>
+          <ul><li>{{ plan.description or "Full gym access" }}</li><li>{{ plan_counts.get(plan.id, 0) }} active members</li><li>Renewal reminders included</li></ul>
+          <div class="plan-actions">
+            <button class="btn btn-ghost" type="button" data-open-modal="editPlanModal{{ plan.id }}"><i data-icon="edit"></i>Edit</button>
+            <button class="btn btn-ghost danger" type="button"><i data-icon="trash"></i>Delete</button>
+          </div>
+        </article>
+        {% endfor %}
+      </section>
+
+      <section class="dashboard-grid" id="payments">
+        <article class="card">
+          <div class="card-head"><div><h2>Payment History</h2><p>Recent completed and pending transactions.</p></div></div>
+          <div class="compact-list">
+            {% for payment in payments %}
+            <div class="list-row"><div><b>{{ payment.member_name }}</b><span>{{ payment.payment_method|title }} - {{ payment.payment_date }}</span></div><em>Rs {{ "%.0f"|format(payment.amount) }}</em></div>
+            {% else %}
+            <div class="empty-state"><i data-icon="wallet"></i><b>No payments yet</b><span>Payments created from membership signups will show here.</span></div>
+            {% endfor %}
+          </div>
+        </article>
+        <article class="card">
+          <div class="card-head"><div><h2>Monthly Revenue</h2><p>Visual revenue summary.</p></div></div>
+          <div class="donut-wrap">
+            <div class="donut" style="--done: {{ payment_summary.completed_deg }}deg"><strong>{{ payment_summary.completed_pct }}%</strong></div>
+            <div>
+              <b>Rs {{ "%.0f"|format(payment_summary.completed) }}</b>
+              <span>Completed revenue</span>
+              <small>Rs {{ "%.0f"|format(payment_summary.other) }} pending / other</small>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      {% elif role == "member" %}
+      {% set member = members[0] if members else none %}
+      {% set latest_payment = payments[0] if payments else none %}
+      <section class="hero-panel member-hero">
+        <div>
+          <span class="eyebrow">Member workspace</span>
+          <h1>Welcome back, {{ user.full_name.split(" ")[0] }}.</h1>
+          <p>View your membership, trainer assignment, payment status, and attendance at a glance.</p>
+        </div>
+        <div class="quick-actions">
+          <button class="btn btn-primary" type="button" data-open-modal="aiModal"><i data-icon="activity"></i>AI Fitness Plan</button>
+        </div>
+      </section>
+
+      <section class="role-grid" id="membership">
+        <article class="stat-card role-card wide-card">
+          <div class="stat-icon cyan"><i data-icon="badge"></i></div>
+          <span>Current Plan</span>
+          <strong>{{ member.plan_name if member and member.plan_name else "No Plan" }}</strong>
+          <small class="trend">{{ member.duration_days if member and member.duration_days else 0 }} days membership</small>
+        </article>
+        <article class="stat-card role-card">
+          <div class="stat-icon red"><i data-icon="clock"></i></div>
+          <span>Expiry Date</span>
+          <strong>{{ member.expiry_date if member and member.expiry_date else "Not Set" }}</strong>
+          <small class="trend warn">{% if member and member.days_to_expiry is not none %}{{ member.days_to_expiry }} days remaining{% else %}Ask admin to assign a plan{% endif %}</small>
+        </article>
+        <article class="stat-card role-card" id="my-payments">
+          <div class="stat-icon green"><i data-icon="wallet"></i></div>
+          <span>Payment Status</span>
+          <strong>{{ latest_payment.payment_status|title if latest_payment else "Pending" }}</strong>
+          <small class="trend up">{% if latest_payment %}Rs {{ "%.0f"|format(latest_payment.amount) }} paid{% else %}No payment recorded{% endif %}</small>
+        </article>
+        <article class="stat-card role-card" id="my-trainer">
+          <div class="stat-icon violet"><i data-icon="dumbbell"></i></div>
+          <span>Assigned Trainer</span>
+          <strong>{{ member.trainer_name if member and member.trainer_name else "Not Assigned" }}</strong>
+          <small class="trend">Trainer support</small>
+        </article>
+        <article class="stat-card role-card">
+          <div class="stat-icon blue"><i data-icon="activity"></i></div>
+          <span>Attendance</span>
+          <strong>{{ stats.attendance }}%</strong>
+          <small class="trend up">{{ stats.attendance_days }} check-in days this month</small>
+        </article>
+      </section>
+
+      <section class="dashboard-grid">
+        <article class="card">
+          <div class="card-head"><div><h2>Membership Summary</h2><p>Your active gym membership details.</p></div></div>
+          <div class="profile-summary">
+            <div><span>Name</span><b>{{ user.full_name }}</b></div>
+            <div><span>Phone</span><b>{{ user.phone }}</b></div>
+            <div><span>Join Date</span><b>{{ member.join_date if member else "Not set" }}</b></div>
+            <div><span>Status</span><b><span class="status-badge {{ member.status if member else 'inactive' }}">{{ member.status|title if member else "Inactive" }}</span></b></div>
+          </div>
+        </article>
+        <article class="card">
+          <div class="card-head"><div><h2>Recent Payments</h2><p>Your membership payment history.</p></div></div>
+          <div class="compact-list">
+            {% for payment in payments %}
+            <div class="list-row"><div><b>{{ payment.payment_for|title }}</b><span>{{ payment.payment_method|title }} - {{ payment.payment_date }}</span></div><em>Rs {{ "%.0f"|format(payment.amount) }}</em></div>
+            {% else %}
+            <div class="empty-state"><i data-icon="wallet"></i><b>No payments found</b><span>Your payment records will appear here after admin entry.</span></div>
+            {% endfor %}
+          </div>
+        </article>
+      </section>
+      {% elif role == "trainer" %}
+      <section class="hero-panel trainer-hero">
+        <div>
+          <span class="eyebrow">Trainer workspace</span>
+          <h1>Hello Coach {{ user.full_name.split(" ")[0] }}.</h1>
+          <p>Manage assigned members, review attendance, and keep simple progress notes.</p>
+        </div>
+        <div class="quick-actions">
+          <button class="btn btn-primary" type="button" data-open-modal="aiModal"><i data-icon="activity"></i>Plan Session</button>
+        </div>
+      </section>
+
+      <section class="role-grid" id="attendance">
+        <article class="stat-card role-card">
+          <div class="stat-icon blue"><i data-icon="users"></i></div>
+          <span>Assigned Members</span>
+          <strong data-count="{{ stats.assigned_members }}">{{ stats.assigned_members }}</strong>
+          <small class="trend">Members under your coaching</small>
+        </article>
+        <article class="stat-card role-card">
+          <div class="stat-icon green"><i data-icon="calendar"></i></div>
+          <span>Today's Sessions</span>
+          <strong data-count="{{ stats.today_sessions }}">{{ stats.today_sessions }}</strong>
+          <small class="trend up">Simple daily estimate</small>
+        </article>
+        <article class="stat-card role-card">
+          <div class="stat-icon violet"><i data-icon="chart"></i></div>
+          <span>Monthly Visits</span>
+          <strong>{{ stats.monthly_visits }}</strong>
+          <small class="trend">Recorded check-ins</small>
+        </article>
+        <article class="stat-card role-card">
+          <div class="stat-icon amber"><i data-icon="activity"></i></div>
+          <span>Attendance Overview</span>
+          <strong>{{ stats.attendance }}%</strong>
+          <small class="trend up">Monthly attendance</small>
+        </article>
+      </section>
+
+      <section class="card data-card" id="assigned-members">
+        <div class="card-head split">
+          <div><h2>Assigned Members</h2><p>Members currently assigned to you.</p></div>
+          <input class="table-search" data-table-search="trainerMembersTable" placeholder="Search assigned members"/>
+        </div>
+        <div class="table-scroll">
+          <table class="tbl sortable" id="trainerMembersTable">
+            <thead><tr><th>Profile</th><th>Name</th><th>Phone</th><th>Plan</th><th>Join Date</th><th>Expiry Date</th><th>Status</th></tr></thead>
+            <tbody>
+              {% for member in members %}
+              <tr data-status="{{ member.status }}">
+                <td><span class="avatar">{{ member.full_name[:2].upper() }}</span></td>
+                <td><b>{{ member.full_name }}</b><small>{{ member.email or "No email" }}</small></td>
+                <td>{{ member.phone }}</td>
+                <td>{{ member.plan_name or "Unassigned" }}</td>
+                <td>{{ member.join_date }}</td>
+                <td>{{ member.expiry_date or "Not set" }}</td>
+                <td><span class="status-badge {{ member.status }}">{{ member.status }}</span></td>
+              </tr>
+              {% else %}
+              <tr><td colspan="7"><div class="empty-state"><i data-icon="users"></i><b>No assigned members</b><span>Admin-assigned members will show here.</span></div></td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="dashboard-grid" id="notes">
+        <article class="card">
+          <div class="card-head"><div><h2>Attendance Trend</h2><p>Recorded visits for your assigned members.</p></div></div>
+          <div class="analytics-layout trainer-progress">
+            <div class="line-chart" aria-label="Trainer attendance chart">
+              {% for bar in attendance_bars %}
+              <span style="height:{{ bar.height }}%" title="{{ bar.label }} visits: {{ bar.value }}"><em>{{ bar.value }}</em><small>{{ bar.label }}</small></span>
+              {% endfor %}
+            </div>
+          </div>
+        </article>
+        <article class="card">
+          <div class="card-head"><div><h2>Notes</h2><p>College-project friendly trainer notes area.</p></div></div>
+          <div class="notes-box">
+            <textarea placeholder="Write simple workout notes for assigned members..."></textarea>
+            <button class="btn btn-primary" type="button">Save Note</button>
+          </div>
+        </article>
+      </section>
+      {% endif %}
+    </main>
+  </div>
+</div>
+
+{% if role == "admin" %}
+<div class="modal" id="memberModal" aria-hidden="true">
+  <div class="modal-card">
+    <div class="modal-head"><div><h2>Add Member</h2><p>Membership expiry is calculated automatically from the selected plan.</p></div><button class="icon-btn" data-close-modal><i data-icon="x"></i></button></div>
+    <form class="form-grid compact-form" method="post" action="{{ url_for('add_member') }}">
+      <label>Full name<input name="full_name" required></label><label>Phone<input name="phone" required></label>
+      <label>Email<input type="email" name="email"></label><label>Password<input type="password" name="password" placeholder="Default: phone number"></label>
+      <label>Gender<select name="gender" required><option value="male">Male</option><option value="female">Female</option><option value="other">Other</option></select></label><label>Date of birth<input type="date" name="date_of_birth"></label>
+      <label>Join date<input type="date" name="join_date" required></label><label>Membership plan<select name="plan_id" required>{% for plan in plans %}<option value="{{ plan.id }}">{{ plan.plan_name }} - Rs {{ "%.0f"|format(plan.price) }}</option>{% endfor %}</select></label>
+      <label>Assigned trainer<select name="assigned_trainer_id"><option value="">No trainer</option>{% for trainer in trainers %}<option value="{{ trainer.id }}">{{ trainer.full_name }}</option>{% endfor %}</select></label><label>Emergency contact<input name="emergency_contact"></label>
+      <label>Emergency phone<input name="emergency_phone"></label><label>Status<select name="status"><option value="active">Active</option><option value="inactive">Inactive</option><option value="suspended">Suspended</option><option value="expired">Expired</option></select></label>
+      <label class="span-2">Address<textarea name="address" rows="2"></textarea></label><button class="btn btn-primary span-2" type="submit">Create Member</button>
+    </form>
+  </div>
+</div>
+
+<div class="modal" id="trainerModal" aria-hidden="true">
+  <div class="modal-card">
+    <div class="modal-head"><div><h2>Add Trainer</h2><p>Create a coach profile and login access.</p></div><button class="icon-btn" data-close-modal><i data-icon="x"></i></button></div>
+    <form class="form-grid compact-form" method="post" action="{{ url_for('add_trainer') }}">
+      <div class="upload-placeholder span-2"><i data-icon="upload"></i><span>Profile upload placeholder</span></div>
+      <label>Full name<input name="full_name" required></label><label>Phone<input name="phone" required></label>
+      <label>Email<input type="email" name="email"></label><label>Password<input type="password" name="password" placeholder="Default: phone number"></label>
+      <label>Specialization<input name="specialization" placeholder="Strength, Yoga"></label><label>Experience years<input type="number" min="0" name="experience_years" value="0"></label>
+      <label>Gender<select name="gender" required><option value="male">Male</option><option value="female">Female</option><option value="other">Other</option></select></label><label>Salary<input type="number" min="0" step="0.01" name="salary" value="0"></label>
+      <label>Hire date<input type="date" name="hire_date" required></label><label>Status<select name="status"><option value="active">Active</option><option value="inactive">Inactive</option><option value="on_leave">On leave</option></select></label>
+      <button class="btn btn-primary span-2" type="submit">Create Trainer</button>
+    </form>
+  </div>
+</div>
+
+<div class="modal" id="planModal" aria-hidden="true">
+  <div class="modal-card small-modal">
+    <div class="modal-head"><div><h2>Create Plan</h2><p>Add a new membership package.</p></div><button class="icon-btn" data-close-modal><i data-icon="x"></i></button></div>
+    <form class="form-grid compact-form" method="post" action="{{ url_for('add_plan') }}">
+      <label>Plan name<input name="plan_name" required></label><label>Price<input type="number" name="price" min="0" required></label>
+      <label>Duration days<input type="number" name="duration_days" min="1" value="30" required></label><label class="span-2">Features<textarea name="description" rows="3"></textarea></label>
+      <button class="btn btn-primary span-2" type="submit">Create Plan</button>
+    </form>
+  </div>
+</div>
+
+{% for plan in plans %}
+<div class="modal" id="editPlanModal{{ plan.id }}" aria-hidden="true">
+  <div class="modal-card small-modal">
+    <div class="modal-head"><div><h2>Edit Plan</h2><p>Update this membership package.</p></div><button class="icon-btn" data-close-modal><i data-icon="x"></i></button></div>
+    <form class="form-grid compact-form" method="post" action="{{ url_for('update_plan', plan_id=plan.id) }}">
+      <label>Plan name<input name="plan_name" value="{{ plan.plan_name }}" required></label><label>Price<input type="number" name="price" min="0" step="0.01" value="{{ plan.price }}" required></label>
+      <label>Duration days<input type="number" name="duration_days" min="1" value="{{ plan.duration_days }}" required></label><label class="span-2">Features<textarea name="description" rows="3">{{ plan.description or "" }}</textarea></label>
+      <button class="btn btn-primary span-2" type="submit">Save Plan</button>
+    </form>
+  </div>
+</div>
+{% endfor %}
+
+{% for member in members %}
+<div class="modal" id="viewMemberModal{{ member.id }}" aria-hidden="true">
+  <div class="modal-card small-modal">
+    <div class="modal-head"><div><h2>Member Details</h2><p>{{ member.full_name }}</p></div><button class="icon-btn" data-close-modal><i data-icon="x"></i></button></div>
+    <div class="profile-summary">
+      <div><span>Name</span><b>{{ member.full_name }}</b></div>
+      <div><span>Phone</span><b>{{ member.phone }}</b></div>
+      <div><span>Email</span><b>{{ member.email or "No email" }}</b></div>
+      <div><span>Gender</span><b>{{ member.gender|title }}</b></div>
+      <div><span>Date of Birth</span><b>{{ member.date_of_birth or "Not set" }}</b></div>
+      <div><span>Join Date</span><b>{{ member.join_date }}</b></div>
+      <div><span>Plan</span><b>{{ member.plan_name or "Unassigned" }}</b></div>
+      <div><span>Expiry Date</span><b>{{ member.expiry_date or "Not set" }}</b></div>
+      <div><span>Trainer</span><b>{{ member.trainer_name or "Not assigned" }}</b></div>
+      <div><span>Status</span><b><span class="status-badge {{ member.status }}">{{ member.status }}</span></b></div>
+      <div><span>Emergency Contact</span><b>{{ member.emergency_contact or "Not set" }}</b></div>
+      <div><span>Emergency Phone</span><b>{{ member.emergency_phone or "Not set" }}</b></div>
+      <div class="span-2"><span>Address</span><b>{{ member.address or "Not set" }}</b></div>
+    </div>
+  </div>
+</div>
+{% endfor %}
+
+{% for trainer in trainers %}
+<div class="modal" id="viewTrainerModal{{ trainer.id }}" aria-hidden="true">
+  <div class="modal-card small-modal">
+    <div class="modal-head"><div><h2>Trainer Details</h2><p>{{ trainer.full_name }}</p></div><button class="icon-btn" data-close-modal><i data-icon="x"></i></button></div>
+    <div class="profile-summary">
+      <div><span>Name</span><b>{{ trainer.full_name }}</b></div>
+      <div><span>Phone</span><b>{{ trainer.phone }}</b></div>
+      <div><span>Email</span><b>{{ trainer.email or "No email" }}</b></div>
+      <div><span>Gender</span><b>{{ trainer.gender|title }}</b></div>
+      <div><span>Specialization</span><b>{{ trainer.specialization or "General fitness" }}</b></div>
+      <div><span>Experience</span><b>{{ trainer.experience_years }} yrs</b></div>
+      <div><span>Hire Date</span><b>{{ trainer.hire_date }}</b></div>
+      <div><span>Salary</span><b>Rs {{ "%.0f"|format(trainer.salary) }}</b></div>
+      <div><span>Assigned Members</span><b>{{ trainer.assigned_members }}</b></div>
+      <div><span>Status</span><b><span class="status-badge {{ trainer.status }}">{{ trainer.status }}</span></b></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="editTrainerModal{{ trainer.id }}" aria-hidden="true">
+  <div class="modal-card">
+    <div class="modal-head"><div><h2>Edit Trainer</h2><p>Update coach profile and employment details.</p></div><button class="icon-btn" data-close-modal><i data-icon="x"></i></button></div>
+    <form class="form-grid compact-form" method="post" action="{{ url_for('update_trainer', trainer_id=trainer.id) }}">
+      <label>Full name<input name="full_name" value="{{ trainer.full_name }}" required></label><label>Phone<input name="phone" value="{{ trainer.phone }}" required></label>
+      <label>Email<input type="email" name="email" value="{{ trainer.email or '' }}"></label><label>Specialization<input name="specialization" value="{{ trainer.specialization or '' }}"></label>
+      <label>Experience years<input type="number" min="0" name="experience_years" value="{{ trainer.experience_years }}"></label><label>Gender<select name="gender" required>{% for gender in ["male", "female", "other"] %}<option value="{{ gender }}" {% if trainer.gender == gender %}selected{% endif %}>{{ gender|title }}</option>{% endfor %}</select></label>
+      <label>Hire date<input type="date" name="hire_date" value="{{ trainer.hire_date }}" required></label><label>Salary<input type="number" min="0" step="0.01" name="salary" value="{{ trainer.salary }}"></label>
+      <label>Status<select name="status">{% for status in ["active", "inactive", "on_leave"] %}<option value="{{ status }}" {% if trainer.status == status %}selected{% endif %}>{{ status|replace("_", " ")|title }}</option>{% endfor %}</select></label>
+      <button class="btn btn-primary span-2" type="submit">Save Trainer</button>
+    </form>
+  </div>
+</div>
+{% endfor %}
+{% endif %}
+
+<div class="modal" id="aiModal" aria-hidden="true">
+  <div class="modal-card small-modal">
+    <div class="modal-head"><div><h2>AI Fitness Assistant</h2><p>Offline prompt generator for workout and diet suggestions.</p></div><button class="icon-btn" data-close-modal><i data-icon="x"></i></button></div>
+    <div class="ai-tool">
+      <input id="aiGoal" placeholder="Example: fat loss, beginner, 3 days/week"/>
+      <button class="btn btn-primary" id="generateAi" type="button">Generate</button>
+      <div class="ai-output" id="aiOutput">Enter a goal to generate a starter recommendation.</div>
+    </div>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
